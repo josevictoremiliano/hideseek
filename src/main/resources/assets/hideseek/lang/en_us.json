@@ -1,0 +1,21 @@
+{
+  "itemGroup.hideseek": "Example Mod Tab",
+  "block.hideseek.example_block": "Example Block",
+  "item.hideseek.example_item": "Example Item",
+
+  "hideseek.configuration.title": "Hide Seek Configs",
+  "hideseek.configuration.section.hideseek.common.toml": "Hide Seek Configs",
+  "hideseek.configuration.section.hideseek.common.toml.title": "Hide Seek Configs",
+  "hideseek.configuration.items": "Item List",
+  "hideseek.configuration.logDirtBlock": "Log Dirt Block",
+  "hideseek.configuration.magicNumberIntroduction": "Magic Number Text",
+  "hideseek.configuration.magicNumber": "Magic Number",
+  
+  "hideseek.commands.scoreboard.show": "Scoreboard shown to all players",
+  "hideseek.commands.scoreboard.hide": "Scoreboard hidden from all players",
+  "hideseek.game.lobby.waiting": "⏳ Waiting for Players",
+  "hideseek.game.starting": "🚀 Game Starting!",
+  "hideseek.game.hiding": "👁 Phase: Hiding",
+  "hideseek.game.seeking": "🔍 Phase: Seeking",
+  "hideseek.game.ending": "🏆 Game Finished"
+}
