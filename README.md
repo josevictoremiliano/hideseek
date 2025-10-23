@@ -17,6 +17,9 @@ Um mod multiplayer de Esconde-Esconde para Minecraft 1.21.1 usando NeoForge 21.1
 - `/hns scoreboard show` - Mostrar scoreboard (OP)
 - `/hns scoreboard hide` - Ocultar scoreboard (OP)
 - `/hns leaveall` - Remove todos os jogadores do jogo (OP)
+- `/hns stats [player]` - Ver estatísticas (próprias ou de outro jogador)
+- `/hns leaderboard [category]` - Ver ranking dos melhores jogadores
+- `/hns globalstats` - Ver estatísticas globais do servidor
 
 ### ✅ Estados do Jogo
 O jogo segue o fluxo: **LOBBY → STARTING → HIDING → SEEKING → ENDING → LOBBY**
@@ -66,6 +69,20 @@ Todas as configurações são salvas no arquivo `hideseek-common.toml`:
 5. Seekers capturam Hiders atacando eles
 6. Vitória: Seekers capturam todos OU tempo esgota (Hiders vencem)
 
+### Visualizando Estatísticas
+- **Suas stats**: `/hns stats`
+- **Stats de outro jogador**: `/hns stats NomeDoJogador`
+- **Ranking geral**: `/hns leaderboard`
+- **Rankings específicos**: 
+  - `/hns leaderboard wins` - Mais vitórias
+  - `/hns leaderboard winrate` - Melhor taxa de vitória
+  - `/hns leaderboard hider` - Melhores Hiders
+  - `/hns leaderboard seeker` - Melhores Seekers  
+  - `/hns leaderboard captures` - Mais capturas feitas
+  - `/hns leaderboard survival` - Maior tempo de sobrevivência
+  - `/hns leaderboard streak` - Maior sequência de vitórias
+- **Estatísticas do servidor**: `/hns globalstats`
+
 ## 🛠️ Desenvolvimento
 
 ### Estrutura do Código
@@ -75,6 +92,8 @@ Todas as configurações são salvas no arquivo `hideseek-common.toml`:
 - `effects/` - Efeitos nos jogadores e teleportes
 - `events/` - Event handlers (captura, limites do mapa)
 - `util/` - Utilitários (conversão de coordenadas)
+- `stats/` - Sistema de estatísticas (PlayerStats, StatsManager)
+- `chat/` - Gerenciamento de mensagens de chat
 
 ### Compilação
 ```bash
@@ -90,11 +109,25 @@ $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
 .\gradlew runServer
 ```
 
+### ✅ Sistema de Chat
+- **Mensagens de entrada/saída**: Notificações quando jogadores entram ou saem do jogo
+- **Avisos de estado**: Contagem regressiva, formação de times, início das fases
+- **Eventos de captura**: Anúncios quando Hiders são capturados
+- **Avisos de tempo**: Alertas em 60s, 30s, 10s e 5s antes do fim de cada fase
+- **Mensagens de vitória**: Parabeniza vencedores com mensagens personalizadas
+- **Cores e formatação**: Usa ChatFormatting para destacar informações importantes
+
+### ✅ Sistema de Estatísticas e Rankings
+- **Coleta automática**: Registra todas as partidas, vitórias, derrotas, capturas e tempos
+- **Estatísticas individuais**: `/hns stats` mostra detalhes completos de cada jogador
+- **Rankings múltiplos**: Leaderboards por vitórias, taxa de vitória, capturas, sobrevivência, etc.
+- **Persistência**: Dados salvos em `hideseek_stats.json` que persiste entre reinicializações
+- **Métricas avançadas**: Streaks de vitórias, tempo total jogado, recordes pessoais
+- **Estatísticas globais**: Visão geral do servidor com `/hns globalstats`
+
 ### Próximos Passos
 - [ ] Sistema de spawn aleatório para Hiders
-- [ ] Mensagens de chat para eventos do jogo
 - [ ] Modo espectador adequado para Hiders capturados
-- [ ] Estatísticas e placar de vitórias
 - [ ] Integração com outros mods (JEI, etc.)
 
 ## 📋 Requisitos

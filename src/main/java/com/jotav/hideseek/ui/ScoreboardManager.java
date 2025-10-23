@@ -185,10 +185,22 @@ public class ScoreboardManager {
     public void removePlayer(ServerPlayer player) {
         trackingPlayers.remove(player);
         
-        // Remover de todos os teams
-        if (hidersTeam != null) scoreboard.removePlayerFromTeam(player.getScoreboardName(), hidersTeam);
-        if (seekersTeam != null) scoreboard.removePlayerFromTeam(player.getScoreboardName(), seekersTeam);
-        if (spectatorsTeam != null) scoreboard.removePlayerFromTeam(player.getScoreboardName(), spectatorsTeam);
+        // Remover de todos os teams com tratamento de erro
+        try {
+            if (hidersTeam != null) scoreboard.removePlayerFromTeam(player.getScoreboardName(), hidersTeam);
+        } catch (Exception e) {
+            // Jogador pode não estar no team
+        }
+        try {
+            if (seekersTeam != null) scoreboard.removePlayerFromTeam(player.getScoreboardName(), seekersTeam);
+        } catch (Exception e) {
+            // Jogador pode não estar no team
+        }
+        try {
+            if (spectatorsTeam != null) scoreboard.removePlayerFromTeam(player.getScoreboardName(), spectatorsTeam);
+        } catch (Exception e) {
+            // Jogador pode não estar no team
+        }
     }
     
     /**
@@ -238,6 +250,14 @@ public class ScoreboardManager {
         if (scoreboard != null) {
             scoreboard.setDisplayObjective(DisplaySlot.SIDEBAR, null);
         }
+    }
+    
+    /**
+     * Oculta scoreboard e limpa teams (para final de jogo)
+     */
+    public void hideScoreboardAndClearTeams() {
+        hideScoreboard();
+        clearScoreboard();
     }
     
     /**

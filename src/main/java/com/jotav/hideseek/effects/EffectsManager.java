@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
@@ -21,6 +22,11 @@ import java.util.Set;
 public class EffectsManager {
     private static EffectsManager instance;
     private final Set<ServerPlayer> playersWithEffects = new HashSet<>();
+    private final GameModeManager gameModeManager = GameModeManager.getInstance();
+    
+    // Configuração de Jump Boost (+5 blocos = nível 4)
+    private static final int JUMP_BOOST_LEVEL = 4; // +5 blocos de altura
+    private static final int JUMP_BOOST_DURATION = Integer.MAX_VALUE; // Infinito
     
     private EffectsManager() {}
     
@@ -70,14 +76,87 @@ public class EffectsManager {
             seeker.addEffect(blindness);
             seeker.addEffect(jumpBoost);
             
+            // Mudar para Adventure Mode para impedir quebra de blocos
+            gameModeManager.setGameModeToAdventure(seeker);
+            
             playersWithEffects.add(seeker);
             
-            HideSeek.LOGGER.debug("Applied seeker effects to player: {}", seeker.getName().getString());
+            HideSeek.LOGGER.debug("Removed seeker effects from player: {}", seeker.getName().getString());
         }
     }
     
     /**
-     * Remove todos os efeitos de imobilização dos Seekers
+     * Aplica Adventure Mode e Jump Boost temporário para Hiders durante HIDING
+     */
+    public void applyHiderEffects(Set<ServerPlayer> hiders) {
+        for (ServerPlayer hider : hiders) {
+            // Mudar para Adventure Mode para impedir quebra de blocos
+            gameModeManager.setGameModeToAdventure(hider);
+            
+            // Aplicar Jump Boost temporário (+5 blocos)
+            MobEffectInstance jumpBoost = new MobEffectInstance(
+                MobEffects.JUMP,
+                JUMP_BOOST_DURATION,
+                JUMP_BOOST_LEVEL,
+                false, false, false
+            );
+            hider.addEffect(jumpBoost);
+            
+            playersWithEffects.add(hider);
+            HideSeek.LOGGER.debug("Applied adventure mode and jump boost to hider: {}", hider.getName().getString());
+        }
+    }
+    
+    /**
+     * Remove Jump Boost dos Hiders (quando fase SEEKING começa)
+     */
+    public void removeHiderJumpBoost(Set<ServerPlayer> hiders) {
+        for (ServerPlayer hider : hiders) {
+            // Remover Jump Boost dos Hiders
+            hider.removeEffect(MobEffects.JUMP);
+            
+            HideSeek.LOGGER.debug("Removed jump boost from hider: {}", hider.getName().getString());
+        }
+    }
+    
+    /**
+     * Aplica Adventure Mode para espectadores
+     */
+    public void applySpectatorEffects(Set<ServerPlayer> spectators) {
+        for (ServerPlayer spectator : spectators) {
+            // Mudar para Adventure Mode
+            gameModeManager.setGameModeToAdventure(spectator);
+            
+            playersWithEffects.add(spectator);
+            HideSeek.LOGGER.debug("Applied adventure mode to spectator: {}", spectator.getName().getString());
+        }
+    }
+    
+    /**
+     * Remove todos os efeitos e restaura gamemodes para todos os jogadores
+     */
+    public void clearAllEffectsAndRestoreGameModes() {
+        for (ServerPlayer player : new HashSet<>(playersWithEffects)) {
+            // Remover todos os efeitos de poção
+            player.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
+            player.removeEffect(MobEffects.BLINDNESS);
+            player.removeEffect(MobEffects.JUMP);
+            
+            // Restaurar gamemode original (Survival)
+            gameModeManager.restoreOriginalGameMode(player);
+        }
+        
+        // Limpar set de jogadores com efeitos
+        playersWithEffects.clear();
+        
+        // Restaurar todos os gamemodes
+        gameModeManager.restoreAllGameModes();
+        
+        HideSeek.LOGGER.info("Cleared all effects and restored gamemodes for all players");
+    }
+    
+    /**
+     * Remove todos os efeitos de imobilização dos Seekers e aplica Jump Boost permanente
      */
     public void removeSeekerEffects(Set<ServerPlayer> seekers) {
         for (ServerPlayer seeker : seekers) {
@@ -85,9 +164,18 @@ public class EffectsManager {
             seeker.removeEffect(MobEffects.BLINDNESS);
             seeker.removeEffect(MobEffects.JUMP);
             
+            // Aplicar Jump Boost permanente para Seekers (+5 blocos)
+            MobEffectInstance jumpBoost = new MobEffectInstance(
+                MobEffects.JUMP,
+                JUMP_BOOST_DURATION,
+                JUMP_BOOST_LEVEL,
+                false, false, false
+            );
+            seeker.addEffect(jumpBoost);
+            
             playersWithEffects.remove(seeker);
             
-            HideSeek.LOGGER.debug("Removed seeker effects from player: {}", seeker.getName().getString());
+            HideSeek.LOGGER.debug("Removed seeker effects and applied jump boost to player: {}", seeker.getName().getString());
         }
     }
     

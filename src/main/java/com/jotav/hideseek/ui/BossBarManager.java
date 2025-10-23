@@ -1,6 +1,7 @@
 package com.jotav.hideseek.ui;
 
 import com.jotav.hideseek.Config;
+import com.jotav.hideseek.chat.ChatManager;
 import com.jotav.hideseek.game.GameManager;
 import com.jotav.hideseek.game.GameState;
 import net.minecraft.network.chat.Component;
@@ -91,6 +92,7 @@ public class BossBarManager {
      */
     public void startPhaseTimer(GameState phase, int durationSeconds) {
         stopTimer(); // Para timer anterior se houver
+        resetTimeWarnings(); // Resetar avisos de tempo
         
         this.phaseStartTime = System.currentTimeMillis();
         this.phaseDurationSeconds = durationSeconds;
@@ -122,6 +124,9 @@ public class BossBarManager {
         long elapsedMs = System.currentTimeMillis() - phaseStartTime;
         int elapsedSeconds = (int) (elapsedMs / 1000);
         int remainingSeconds = Math.max(0, phaseDurationSeconds - elapsedSeconds);
+        
+        // Enviar avisos de tempo
+        sendTimeWarnings(phase, remainingSeconds);
         
         // Calcular progresso (1.0 = cheio, 0.0 = vazio)
         float progress = (float) remainingSeconds / phaseDurationSeconds;
@@ -228,5 +233,61 @@ public class BossBarManager {
                 resultBar.removeAllPlayers();
             }
         }, 5000);
+    }
+    
+    // Variáveis para controle de avisos de tempo
+    private boolean warningAt60Sent = false;
+    private boolean warningAt30Sent = false;
+    private boolean warningAt10Sent = false;
+    private boolean warningAt5Sent = false;
+    
+    /**
+     * Envia avisos de tempo em momentos críticos
+     */
+    private void sendTimeWarnings(GameState phase, int remainingSeconds) {
+        ChatManager chatManager = ChatManager.getInstance();
+        MinecraftServer server = GameManager.getInstance().getServer();
+        
+        if (server == null) return;
+        
+        String phaseName = switch (phase) {
+            case HIDING -> "ESCONDER";
+            case SEEKING -> "BUSCAR";
+            default -> "";
+        };
+        
+        // Avisos apenas para fases HIDING e SEEKING
+        if (phase != GameState.HIDING && phase != GameState.SEEKING) return;
+        
+        // Aviso de 60 segundos
+        if (remainingSeconds == 60 && !warningAt60Sent) {
+            chatManager.timeWarning(server, remainingSeconds, phaseName);
+            warningAt60Sent = true;
+        }
+        // Aviso de 30 segundos
+        else if (remainingSeconds == 30 && !warningAt30Sent) {
+            chatManager.timeWarning(server, remainingSeconds, phaseName);
+            warningAt30Sent = true;
+        }
+        // Aviso de 10 segundos
+        else if (remainingSeconds == 10 && !warningAt10Sent) {
+            chatManager.timeWarning(server, remainingSeconds, phaseName);
+            warningAt10Sent = true;
+        }
+        // Aviso de 5 segundos
+        else if (remainingSeconds == 5 && !warningAt5Sent) {
+            chatManager.timeWarning(server, remainingSeconds, phaseName);
+            warningAt5Sent = true;
+        }
+    }
+    
+    /**
+     * Reseta os avisos de tempo para uma nova fase
+     */
+    private void resetTimeWarnings() {
+        warningAt60Sent = false;
+        warningAt30Sent = false;
+        warningAt10Sent = false;
+        warningAt5Sent = false;
     }
 }

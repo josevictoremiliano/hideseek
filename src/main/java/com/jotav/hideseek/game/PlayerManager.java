@@ -75,6 +75,10 @@ public class PlayerManager {
     public boolean captureHider(ServerPlayer hider) {
         if (hiders.remove(hider)) {
             spectators.add(hider);
+            
+            // Aplicar Adventure Mode para o espectador
+            com.jotav.hideseek.effects.EffectsManager.getInstance().applySpectatorEffects(Set.of(hider));
+            
             return true;
         }
         return false;
@@ -125,6 +129,9 @@ public class PlayerManager {
     public int getLobbyCount() { return lobbyPlayers.size(); }
     public int getHidersCount() { return hiders.size(); }
     public int getSeekersCount() { return seekers.size(); }
+    public int getTotalPlayerCount() { 
+        return lobbyPlayers.size() + hiders.size() + seekers.size() + spectators.size();
+    }
     public int getTotalPlayers() { 
         return lobbyPlayers.size() + hiders.size() + seekers.size() + spectators.size(); 
     }

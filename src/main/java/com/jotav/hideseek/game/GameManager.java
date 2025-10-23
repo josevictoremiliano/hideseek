@@ -2,7 +2,9 @@ package com.jotav.hideseek.game;
 
 import com.jotav.hideseek.Config;
 import com.jotav.hideseek.HideSeek;
+import com.jotav.hideseek.chat.ChatManager;
 import com.jotav.hideseek.effects.EffectsManager;
+import com.jotav.hideseek.stats.StatsManager;
 import com.jotav.hideseek.ui.BossBarManager;
 import com.jotav.hideseek.ui.ScoreboardManager;
 import com.jotav.hideseek.util.ConfigHelper;
@@ -24,6 +26,8 @@ public class GameManager {
     
     private GameState currentState = GameState.LOBBY;
     private final PlayerManager playerManager = new PlayerManager();
+    private final ChatManager chatManager = ChatManager.getInstance();
+    private final StatsManager statsManager = StatsManager.getInstance();
     private MinecraftServer server;
     
     // Configurações do jogo vêm do Config.java
@@ -65,17 +69,24 @@ public class GameManager {
         HideSeek.LOGGER.info("GameManager initialized with server");
     }
     
+    public MinecraftServer getServer() {
+        return server;
+    }
+    
     /**
      * Jogador tenta entrar no jogo
      */
     public boolean joinGame(ServerPlayer player) {
         if (currentState != GameState.LOBBY) {
-            // TODO: Enviar mensagem de erro
+            chatManager.gameAlreadyInProgress(player);
             return false;
         }
         
         boolean joined = playerManager.joinLobby(player);
         if (joined) {
+            // Atualizar estatísticas com nome atual do jogador
+            statsManager.updatePlayerName(player);
+            
             // Teleportar para lobby spawn
             EffectsManager.getInstance().teleportToLobby(player);
             
@@ -85,6 +96,11 @@ public class GameManager {
             
             // Atualizar UI para todos
             ScoreboardManager.getInstance().updateScoreboard();
+            
+            // Enviar mensagem de chat
+            int totalPlayers = playerManager.getTotalPlayerCount();
+            int minRequired = Config.MIN_PLAYERS.get();
+            chatManager.playerJoinedGame(server, player, totalPlayers, minRequired);
             
             HideSeek.LOGGER.info("Player {} joined the game lobby", player.getName().getString());
         }
@@ -107,6 +123,10 @@ public class GameManager {
             // Atualizar UI para todos
             ScoreboardManager.getInstance().updateScoreboard();
             
+            // Enviar mensagem de chat
+            int remainingPlayers = playerManager.getTotalPlayerCount();
+            chatManager.playerLeftGame(server, player, remainingPlayers);
+            
             HideSeek.LOGGER.info("Player {} left the game", player.getName().getString());
         }
         return left;
@@ -121,8 +141,7 @@ public class GameManager {
         }
         
         if (playerManager.getLobbyCount() < Config.MIN_PLAYERS.get()) {
-            // TODO: Mensagem de erro - mínimo jogadores insuficientes
-            return false;
+            return false; // Mensagem será enviada pelo comando
         }
         
         transitionToStarting();
@@ -141,21 +160,30 @@ public class GameManager {
         // Parar sistemas de UI
         BossBarManager.getInstance().stopTimer();
         
-        // Ocultar scoreboard
-        ScoreboardManager.getInstance().hideScoreboard();
+        // Enviar mensagem de reset
+        chatManager.gameReset(server);
         
-        // Limpar efeitos de todos os jogadores
-        EffectsManager.getInstance().clearAllEffects();
+        // Ocultar scoreboard e limpar teams
+        ScoreboardManager.getInstance().hideScoreboardAndClearTeams();
         
-        // Teleportar todos para lobby
+        // Limpar efeitos de todos os jogadores e restaurar gamemodes
+        EffectsManager.getInstance().clearAllEffectsAndRestoreGameModes();
+        
+        // Teleportar todos para lobby e remover dos teams
         for (ServerPlayer player : playerManager.getHiders()) {
             EffectsManager.getInstance().teleportToLobby(player);
+            BossBarManager.getInstance().removePlayer(player);
+            ScoreboardManager.getInstance().removePlayer(player);
         }
         for (ServerPlayer player : playerManager.getSeekers()) {
             EffectsManager.getInstance().teleportToLobby(player);
+            BossBarManager.getInstance().removePlayer(player);
+            ScoreboardManager.getInstance().removePlayer(player);
         }
         for (ServerPlayer player : playerManager.getSpectators()) {
             EffectsManager.getInstance().teleportToLobby(player);
+            BossBarManager.getInstance().removePlayer(player);
+            ScoreboardManager.getInstance().removePlayer(player);
         }
         
         playerManager.resetAll();
@@ -168,6 +196,58 @@ public class GameManager {
         
         HideSeek.LOGGER.info("Game stopped and reset to lobby");
     }
+    
+    /**
+     * Registra estatísticas do final do jogo
+     */
+    private void recordGameStats(boolean seekersWin) {
+        // Calcular tempo de jogo para cada jogador
+        long hideTimeSeconds = Config.HIDE_TIME.get();
+        long totalGameTimeSeconds = hideTimeSeconds + (System.currentTimeMillis() - phaseStartTime) / 1000;
+        
+        // Registrar vitórias/derrotas
+        if (seekersWin) {
+            // Seekers venceram
+            for (ServerPlayer seeker : playerManager.getSeekers()) {
+                statsManager.recordWin(seeker, false);
+                statsManager.recordSeekingTime(seeker, totalGameTimeSeconds - hideTimeSeconds);
+            }
+            
+            // Hiders perderam (incluindo espectadores que foram capturados)
+            for (ServerPlayer hider : playerManager.getHiders()) {
+                statsManager.recordLoss(hider, true);
+                statsManager.recordHidingTime(hider, totalGameTimeSeconds);
+            }
+            for (ServerPlayer spectator : playerManager.getSpectators()) {
+                // Espectadores são ex-Hiders que foram capturados
+                statsManager.recordLoss(spectator, true);
+                // Tempo de sobrevivência foi menor que o total
+            }
+        } else {
+            // Hiders venceram
+            for (ServerPlayer hider : playerManager.getHiders()) {
+                statsManager.recordWin(hider, true);
+                statsManager.recordHidingTime(hider, totalGameTimeSeconds);
+            }
+            
+            // Seekers perderam
+            for (ServerPlayer seeker : playerManager.getSeekers()) {
+                statsManager.recordLoss(seeker, false);
+                statsManager.recordSeekingTime(seeker, totalGameTimeSeconds - hideTimeSeconds);
+            }
+            
+            // Espectadores (ex-Hiders capturados) também perderam
+            for (ServerPlayer spectator : playerManager.getSpectators()) {
+                statsManager.recordLoss(spectator, true);
+            }
+        }
+        
+        // Salvar estatísticas
+        statsManager.saveStats();
+    }
+    
+    // Variável para rastrear início da fase atual
+    private long phaseStartTime;
     
     /**
      * Transição: LOBBY → STARTING
@@ -185,6 +265,9 @@ public class GameManager {
         // Atualizar scoreboard
         ScoreboardManager.getInstance().updateScoreboard();
         
+        // Enviar mensagem de início
+        chatManager.gameStartingCountdown(server, Config.STARTING_COUNTDOWN.get());
+        
         gameTimer = new Timer();
         gameTimer.schedule(new TimerTask() {
             @Override
@@ -199,9 +282,24 @@ public class GameManager {
      */
     private void transitionToHiding() {
         currentState = GameState.HIDING;
+        phaseStartTime = System.currentTimeMillis();
         
         // Distribuir jogadores em times
         playerManager.assignTeams(Config.MIN_HIDERS.get(), Config.MAX_HIDERS.get());
+        
+        // Registrar início do jogo para estatísticas
+        for (ServerPlayer hider : playerManager.getHiders()) {
+            statsManager.recordGameStart(hider, true);
+        }
+        for (ServerPlayer seeker : playerManager.getSeekers()) {
+            statsManager.recordGameStart(seeker, false);
+        }
+        
+        // Enviar mensagem de times formados
+        chatManager.teamsAssigned(server, playerManager.getHiders().size(), playerManager.getSeekers().size());
+        
+        // Enviar mensagem de início da fase de esconder
+        chatManager.hidingPhaseStarted(server, Config.HIDE_TIME.get());
         
         // Iniciar timer da fase HIDING
         BossBarManager.getInstance().startPhaseTimer(GameState.HIDING, Config.HIDE_TIME.get());
@@ -212,6 +310,9 @@ public class GameManager {
         // Teleportar Seekers para seeker spawn e aplicar efeitos
         EffectsManager.getInstance().teleportSeekersToSpawn(playerManager.getSeekers());
         EffectsManager.getInstance().applySeekerEffects(playerManager.getSeekers());
+        
+        // Aplicar efeitos para Hiders (Adventure Mode + Jump Boost temporário)
+        EffectsManager.getInstance().applyHiderEffects(playerManager.getHiders());
         
         // Teleportar Hiders para posições aleatórias (espalhar pelo mapa)
         BlockPos lobbyPos = getLobbySpawn();
@@ -244,6 +345,7 @@ public class GameManager {
      */
     private void transitionToSeeking() {
         currentState = GameState.SEEKING;
+        phaseStartTime = System.currentTimeMillis();
         
         // Iniciar timer da fase SEEKING
         BossBarManager.getInstance().startPhaseTimer(GameState.SEEKING, Config.SEEK_TIME.get());
@@ -254,7 +356,11 @@ public class GameManager {
         // Remover efeitos dos Seekers (liberá-los)
         EffectsManager.getInstance().removeSeekerEffects(playerManager.getSeekers());
         
-        // TODO: Anunciar liberação dos Seekers via chat/título
+        // Remover Jump Boost dos Hiders (eles perdem a habilidade de pulo extra)
+        EffectsManager.getInstance().removeHiderJumpBoost(playerManager.getHiders());
+        
+        // Anunciar liberação dos Seekers
+        chatManager.seekingPhaseStarted(server, Config.SEEK_TIME.get(), playerManager.getHidersCount());
         
         HideSeek.LOGGER.info("Seeking phase started");
         
@@ -285,7 +391,20 @@ public class GameManager {
         // Atualizar scoreboard
         ScoreboardManager.getInstance().updateScoreboard();
         
+        // Registrar estatísticas do jogo
+        recordGameStats(seekersWin);
+        
+        // Enviar mensagens de vitória
+        if (seekersWin) {
+            chatManager.seekersWin(server, playerManager.getSeekers());
+        } else {
+            chatManager.hidersWin(server, playerManager.getHiders(), playerManager.getHidersCount());
+        }
+        
         HideSeek.LOGGER.info("Game ended - {} won", seekersWin ? "Seekers" : "Hiders");
+        
+        // Anunciar retorno ao lobby
+        chatManager.returningToLobby(server, 10);
         
         // Auto-retorno ao lobby após 10 segundos
         gameTimer = new Timer();
@@ -301,8 +420,8 @@ public class GameManager {
      * Retorna ao lobby
      */
     private void returnToLobby() {
-        // Ocultar scoreboard quando voltar ao lobby
-        ScoreboardManager.getInstance().hideScoreboard();
+        // Ocultar scoreboard e limpar teams quando voltar ao lobby
+        ScoreboardManager.getInstance().hideScoreboardAndClearTeams();
         stopGame(); // Reset completo
     }
     
@@ -315,14 +434,21 @@ public class GameManager {
         }
         
         if (playerManager.captureHider(hider)) {
+            // Registrar estatísticas de captura
+            statsManager.recordPlayerCaptured(hider);
+            statsManager.recordPlayerMadeCapture(seeker);
+            
             // Teleportar hider capturado para posição de espectador (lobby por enquanto)
             EffectsManager.getInstance().teleportToLobby(hider);
             
             // Atualizar UI imediatamente
             ScoreboardManager.getInstance().updateScoreboard();
             
+            // Anunciar captura no chat
+            int hidersRemaining = playerManager.getHidersCount();
+            chatManager.playerCaptured(server, hider, seeker, hidersRemaining);
+            
             // TODO: Aplicar modo espectador real
-            // TODO: Anunciar captura no chat
             
             HideSeek.LOGGER.info("Player {} captured by {}", hider.getName().getString(), seeker.getName().getString());
             
@@ -339,7 +465,7 @@ public class GameManager {
     public int removeAllPlayers() {
         // Parar sistemas de UI
         BossBarManager.getInstance().stopTimer();
-        ScoreboardManager.getInstance().hideScoreboard();
+        ScoreboardManager.getInstance().hideScoreboardAndClearTeams();
         
         // Limpar efeitos de todos os jogadores
         EffectsManager.getInstance().clearAllEffects();
@@ -349,9 +475,14 @@ public class GameManager {
         
         // Teleportar todos para lobby e remover do UI
         for (ServerPlayer player : allPlayers) {
-            EffectsManager.getInstance().teleportToLobby(player);
-            BossBarManager.getInstance().removePlayer(player);
-            ScoreboardManager.getInstance().removePlayer(player);
+            try {
+                EffectsManager.getInstance().teleportToLobby(player);
+                BossBarManager.getInstance().removePlayer(player);
+                ScoreboardManager.getInstance().removePlayer(player);
+            } catch (Exception e) {
+                HideSeek.LOGGER.warn("Error removing player {} from UI systems: {}", 
+                                   player.getName().getString(), e.getMessage());
+            }
         }
         
         // Resetar estado

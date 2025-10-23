@@ -1,7 +1,9 @@
 package com.jotav.hideseek.commands;
 
 import com.jotav.hideseek.Config;
+import com.jotav.hideseek.chat.ChatManager;
 import com.jotav.hideseek.game.GameManager;
+import com.jotav.hideseek.stats.StatsManager;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -76,6 +78,30 @@ public class HideSeekCommands {
                     .executes(HideSeekCommands::showScoreboard))
                 .then(Commands.literal("hide")
                     .executes(HideSeekCommands::hideScoreboard)))
+            
+            // Comandos de Estatísticas
+            .then(Commands.literal("stats")
+                .executes(HideSeekCommands::showOwnStats) // Suas próprias stats
+                .then(Commands.argument("player", StringArgumentType.string())
+                    .executes(HideSeekCommands::showPlayerStats))) // Stats de outro jogador
+            .then(Commands.literal("leaderboard")
+                .executes(HideSeekCommands::showDefaultLeaderboard) // Leaderboard padrão (vitórias)
+                .then(Commands.argument("category", StringArgumentType.string())
+                    .suggests((context, builder) -> {
+                        // Sugestões para categorias de leaderboard
+                        builder.suggest("wins");
+                        builder.suggest("winrate");
+                        builder.suggest("hider");
+                        builder.suggest("seeker");  
+                        builder.suggest("captures");
+                        builder.suggest("survival");
+                        builder.suggest("streak");
+                        builder.suggest("games");
+                        return builder.buildFuture();
+                    })
+                    .executes(HideSeekCommands::showCategoryLeaderboard)))
+            .then(Commands.literal("globalstats")
+                .executes(HideSeekCommands::showGlobalStats))
         );
     }
     
@@ -107,12 +133,23 @@ public class HideSeekCommands {
     
     private static int startGame(CommandContext<CommandSourceStack> context) {
         GameManager gameManager = GameManager.getInstance();
+        ChatManager chatManager = ChatManager.getInstance();
         
         if (gameManager.startGame()) {
             context.getSource().sendSuccess(() -> Component.literal("Jogo iniciado!"), true);
             return 1;
         } else {
-            context.getSource().sendFailure(Component.literal("Não foi possível iniciar o jogo. Verifique se há jogadores suficientes e se o jogo está no lobby."));
+            // Verificar e enviar mensagem específica de erro
+            if (gameManager.getCurrentState() != com.jotav.hideseek.game.GameState.LOBBY) {
+                context.getSource().sendFailure(Component.literal("Não é possível iniciar: jogo já em andamento."));
+            } else {
+                int current = gameManager.getPlayerManager().getLobbyCount();
+                int required = Config.MIN_PLAYERS.get();
+                if (context.getSource().getEntity() instanceof ServerPlayer player) {
+                    chatManager.notEnoughPlayers(player, current, required);
+                }
+                context.getSource().sendFailure(Component.literal("Jogadores insuficientes: " + current + "/" + required));
+            }
             return 0;
         }
     }
@@ -271,6 +308,94 @@ public class HideSeekCommands {
         context.getSource().sendSuccess(() -> Component.literal(
             String.format("Todos os %d jogadores foram removidos do jogo e teleportados para o lobby.", removedPlayers)
         ), true);
+        
+        return 1;
+    }
+    
+    // ================== COMANDOS DE ESTATÍSTICAS ==================
+    
+    /**
+     * Mostra estatísticas próprias do jogador
+     */
+    private static int showOwnStats(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        StatsManager statsManager = StatsManager.getInstance();
+        
+        com.jotav.hideseek.stats.PlayerStats stats = statsManager.getPlayerStats(player);
+        context.getSource().sendSuccess(() -> stats.getDetailedComponent(), false);
+        
+        return 1;
+    }
+    
+    /**
+     * Mostra estatísticas de outro jogador
+     */
+    private static int showPlayerStats(CommandContext<CommandSourceStack> context) {
+        String playerName = StringArgumentType.getString(context, "player");
+        StatsManager statsManager = StatsManager.getInstance();
+        
+        com.jotav.hideseek.stats.PlayerStats stats = statsManager.findPlayerByName(playerName);
+        if (stats == null) {
+            context.getSource().sendFailure(Component.literal("Jogador '" + playerName + "' não encontrado nas estatísticas."));
+            return 0;
+        }
+        
+        context.getSource().sendSuccess(() -> stats.getDetailedComponent(), false);
+        return 1;
+    }
+    
+    /**
+     * Mostra leaderboard padrão (vitórias totais)
+     */
+    private static int showDefaultLeaderboard(CommandContext<CommandSourceStack> context) {
+        StatsManager statsManager = StatsManager.getInstance();
+        
+        Component leaderboard = statsManager.getLeaderboardComponent(StatsManager.RankingType.GAMES_WON, 10);
+        context.getSource().sendSuccess(() -> leaderboard, false);
+        
+        return 1;
+    }
+    
+    /**
+     * Mostra leaderboard por categoria específica
+     */
+    private static int showCategoryLeaderboard(CommandContext<CommandSourceStack> context) {
+        String category = StringArgumentType.getString(context, "category").toLowerCase();
+        StatsManager statsManager = StatsManager.getInstance();
+        
+        StatsManager.RankingType rankingType = switch (category) {
+            case "wins" -> StatsManager.RankingType.GAMES_WON;
+            case "winrate" -> StatsManager.RankingType.WIN_RATE;
+            case "hider" -> StatsManager.RankingType.HIDER_WINS;
+            case "seeker" -> StatsManager.RankingType.SEEKER_WINS;
+            case "captures" -> StatsManager.RankingType.PLAYERS_CAPTURED;
+            case "survival" -> StatsManager.RankingType.LONGEST_SURVIVAL;
+            case "streak" -> StatsManager.RankingType.WIN_STREAK;
+            case "games" -> StatsManager.RankingType.GAMES_PLAYED;
+            default -> {
+                context.getSource().sendFailure(Component.literal("Categoria inválida. Use: wins, winrate, hider, seeker, captures, survival, streak, games"));
+                yield null;
+            }
+        };
+        
+        if (rankingType == null) {
+            return 0;
+        }
+        
+        Component leaderboard = statsManager.getLeaderboardComponent(rankingType, 10);
+        context.getSource().sendSuccess(() -> leaderboard, false);
+        
+        return 1;
+    }
+    
+    /**
+     * Mostra estatísticas globais do servidor
+     */
+    private static int showGlobalStats(CommandContext<CommandSourceStack> context) {
+        StatsManager statsManager = StatsManager.getInstance();
+        
+        Component globalStats = statsManager.getGlobalStatsComponent();
+        context.getSource().sendSuccess(() -> globalStats, false);
         
         return 1;
     }
