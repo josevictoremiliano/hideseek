@@ -145,24 +145,31 @@ public class EffectsManager {
     }
     
     /**
-     * Aplica Adventure Mode para espectadores
+     * Aplica modo Spectator adequado para Hiders capturados
      */
     public void applySpectatorEffects(Set<ServerPlayer> spectators) {
         for (ServerPlayer spectator : spectators) {
-            // Mudar para Adventure Mode
-            gameModeManager.setGameModeToAdventure(spectator);
+            // Salvar gamemode original se ainda não foi salvo
+            if (!gameModeManager.hasOriginalGameMode(spectator.getUUID())) {
+                // Usar o método existente que salva automaticamente
+                gameModeManager.setGameModeToAdventure(spectator);
+            }
             
-            // Regeneração para evitar fome e dano
-            MobEffectInstance regeneration = new MobEffectInstance(
-                MobEffects.REGENERATION,
+            // Mudar para modo Spectator - permite voar e atravessar blocos
+            spectator.setGameMode(GameType.SPECTATOR);
+            
+            // Em modo spectator, jogadores não precisam de regeneração (não tomam dano)
+            // Mas vamos manter invisibilidade para garantir que não sejam vistos
+            MobEffectInstance invisibility = new MobEffectInstance(
+                MobEffects.INVISIBILITY,
                 REGENERATION_DURATION,
-                REGENERATION_LEVEL,
+                0, // Nível 0 = invisibilidade básica
                 false, false, false
             );
-            spectator.addEffect(regeneration);
+            spectator.addEffect(invisibility);
             
             playersWithEffects.add(spectator);
-            HideSeek.LOGGER.debug("Applied adventure mode and regeneration to spectator: {}", spectator.getName().getString());
+            HideSeek.LOGGER.info("Applied spectator mode to captured hider: {}", spectator.getName().getString());
         }
     }
     
@@ -176,6 +183,7 @@ public class EffectsManager {
             player.removeEffect(MobEffects.BLINDNESS);
             player.removeEffect(MobEffects.JUMP);
             player.removeEffect(MobEffects.REGENERATION);
+            player.removeEffect(MobEffects.INVISIBILITY);
             
             // Restaurar gamemode original (Survival)
             gameModeManager.restoreOriginalGameMode(player);

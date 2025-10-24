@@ -126,25 +126,71 @@ public class ScoreboardManager {
         GameManager gameManager = GameManager.getInstance();
         GameState currentState = gameManager.getCurrentState();
         
-        // Atualizar título baseado no estado
+        // Obter contadores
+        int hidersCount = gameManager.getPlayerManager().getHidersCount();
+        int seekersCount = gameManager.getPlayerManager().getSeekersCount();
+        int spectatorsCount = gameManager.getPlayerManager().getSpectatorsCount();
+        
+        // Atualizar título baseado no estado com contadores
         Component title = switch (currentState) {
             case LOBBY -> Component.literal("⏳ Aguardando Jogadores").withStyle(ChatFormatting.YELLOW);
             case STARTING -> Component.literal("🚀 Iniciando Jogo!").withStyle(ChatFormatting.GOLD);
-            case HIDING -> Component.literal("� Fase: Esconder").withStyle(ChatFormatting.GREEN);
-            case SEEKING -> Component.literal("🔍 Fase: Buscar").withStyle(ChatFormatting.RED);
+            case HIDING -> Component.literal("👁 Escondendo (" + hidersCount + " vs " + seekersCount + ")").withStyle(ChatFormatting.GREEN);
+            case SEEKING -> Component.literal("🔍 Buscando (" + hidersCount + " vs " + seekersCount + ")").withStyle(ChatFormatting.RED);
             case ENDING -> Component.literal("🏆 Jogo Finalizado").withStyle(ChatFormatting.LIGHT_PURPLE);
         };
         
         hideSeekObjective.setDisplayName(title);
         
-        // Atualizar teams dos jogadores (principal funcionalidade)
+        // Scoreboard simplificado - apenas título com contadores integrados
+        // As linhas individuais serão adicionadas em versões futuras
+        
+        // Atualizar teams dos jogadores (cores dos nomes)
         updatePlayerTeams();
         
         // Log para debug
-        com.jotav.hideseek.HideSeek.LOGGER.debug("Scoreboard updated - State: {}, Hiders: {}, Seekers: {}", 
-            currentState, 
-            gameManager.getPlayerManager().getHidersCount(),
-            gameManager.getPlayerManager().getSeekersCount());
+        com.jotav.hideseek.HideSeek.LOGGER.debug("Scoreboard updated - State: {}, Hiders: {}, Seekers: {}, Spectators: {}", 
+            currentState, hidersCount, seekersCount, spectatorsCount);
+    }
+    
+    /**
+     * Adiciona uma linha ao scoreboard (desabilitado por ora)
+     */
+    private void addScoreboardLine(String text, int score) {
+        // Método desabilitado temporariamente devido a mudanças na API do Minecraft 1.21
+        // O scoreboard apenas mostrará o título com contadores integrados
+        // TODO: Implementar corretamente com a nova API
+    }
+    
+    /**
+     * Limpa todas as pontuações do scoreboard
+     */
+    private void clearAllScores() {
+        if (hideSeekObjective == null) return;
+        
+        // Limpar de forma mais simples
+        try {
+            // Resetar o objective completamente
+            scoreboard.removeObjective(hideSeekObjective);
+            
+            // Recriar
+            hideSeekObjective = scoreboard.addObjective(
+                "hideseek_game", 
+                ObjectiveCriteria.DUMMY, 
+                Component.literal("Hide & Seek").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
+                ObjectiveCriteria.RenderType.INTEGER,
+                true, // numberFormat
+                null // displayAutoUpdate
+            );
+            
+            // Definir como displaySlot novamente se estava ativo
+            if (scoreboardVisible) {
+                scoreboard.setDisplayObjective(DisplaySlot.SIDEBAR, hideSeekObjective);
+            }
+            
+        } catch (Exception e) {
+            com.jotav.hideseek.HideSeek.LOGGER.debug("Error clearing scoreboard: {}", e.getMessage());
+        }
     }
     
     /**

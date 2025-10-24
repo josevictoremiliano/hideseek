@@ -125,9 +125,14 @@ $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
 - **Métricas avançadas**: Streaks de vitórias, tempo total jogado, recordes pessoais
 - **Estatísticas globais**: Visão geral do servidor com `/hns globalstats`
 
+### ✅ Sistema de Espectador
+- **Modo Spectator**: Hiders capturados entram automaticamente em modo espectador
+- **Capacidades**: Podem voar, atravessar blocos e observar o jogo sem interferir
+- **Invisibilidade**: Efeito aplicado para garantir que não sejam vistos pelos jogadores ativos
+- **Restauração**: Gamemode original restaurado automaticamente ao final do jogo
+
 ### Próximos Passos
 - [ ] Sistema de spawn aleatório para Hiders
-- [ ] Modo espectador adequado para Hiders capturados
 - [ ] Integração com outros mods (JEI, etc.)
 
 ## 📋 Requisitos

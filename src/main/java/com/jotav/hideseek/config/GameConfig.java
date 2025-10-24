@@ -45,6 +45,11 @@ public class GameConfig {
         public String seekerSpawn = "";
         public String mapBoundaryMin = "";
         public String mapBoundaryMax = "";
+        
+        // Configurações de tempo (em segundos)
+        public int hideTime = 60;      // Tempo da fase HIDING
+        public int seekTime = 300;     // Tempo da fase SEEKING
+        public int startCountdown = 10; // Contagem regressiva antes do início
     }
     
     // ================== MÉTODOS DE CONFIGURAÇÃO ==================
@@ -66,6 +71,38 @@ public class GameConfig {
         data.mapBoundaryMax = ConfigHelper.simplePositionToString(max);
         saveConfig();
         HideSeek.LOGGER.info("Map boundary saved: {} to {}", data.mapBoundaryMin, data.mapBoundaryMax);
+    }
+    
+    // ================== MÉTODOS DE CONFIGURAÇÃO DE TEMPO ==================
+    
+    public boolean setHideTime(int seconds) {
+        if (seconds >= 10 && seconds <= 600) {
+            data.hideTime = seconds;
+            saveConfig();
+            HideSeek.LOGGER.info("Hide time set to {} seconds", seconds);
+            return true;
+        }
+        return false;
+    }
+    
+    public boolean setSeekTime(int seconds) {
+        if (seconds >= 30 && seconds <= 1200) {
+            data.seekTime = seconds;
+            saveConfig();
+            HideSeek.LOGGER.info("Seek time set to {} seconds", seconds);
+            return true;
+        }
+        return false;
+    }
+    
+    public boolean setStartCountdown(int seconds) {
+        if (seconds >= 3 && seconds <= 30) {
+            data.startCountdown = seconds;
+            saveConfig();
+            HideSeek.LOGGER.info("Start countdown set to {} seconds", seconds);
+            return true;
+        }
+        return false;
     }
     
     // ================== MÉTODOS DE OBTENÇÃO ==================
@@ -102,6 +139,20 @@ public class GameConfig {
         return data.mapBoundaryMax;
     }
     
+    // ================== GETTERS PARA TEMPOS ==================
+    
+    public int getHideTime() {
+        return data.hideTime;
+    }
+    
+    public int getSeekTime() {
+        return data.seekTime;
+    }
+    
+    public int getStartCountdown() {
+        return data.startCountdown;
+    }
+    
     /**
      * Verifica se todas as configurações essenciais estão definidas
      */
@@ -129,6 +180,25 @@ public class GameConfig {
         }
         
         return missing.toString();
+    }
+    
+    /**
+     * Lista todas as configurações atuais
+     */
+    public String getAllConfigurations() {
+        StringBuilder config = new StringBuilder();
+        config.append("📍 Coordenadas:\n");
+        config.append("  • Lobby: ").append(data.lobbySpawn.isEmpty() ? "Não definido" : data.lobbySpawn).append("\n");
+        config.append("  • Seeker spawn: ").append(data.seekerSpawn.isEmpty() ? "Não definido" : data.seekerSpawn).append("\n");
+        config.append("  • Map boundary: ").append(data.mapBoundaryMin.isEmpty() ? "Não definido" : 
+            data.mapBoundaryMin + " to " + data.mapBoundaryMax).append("\n");
+        
+        config.append("\n⏰ Tempos de Jogo:\n");
+        config.append("  • Tempo para esconder: ").append(data.hideTime).append(" segundos\n");
+        config.append("  • Tempo para buscar: ").append(data.seekTime).append(" segundos\n");
+        config.append("  • Contagem regressiva: ").append(data.startCountdown).append(" segundos\n");
+        
+        return config.toString();
     }
     
     // ================== PERSISTÊNCIA ==================

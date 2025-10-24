@@ -129,6 +129,7 @@ public class PlayerManager {
     public int getLobbyCount() { return lobbyPlayers.size(); }
     public int getHidersCount() { return hiders.size(); }
     public int getSeekersCount() { return seekers.size(); }
+    public int getSpectatorsCount() { return spectators.size(); }
     public int getTotalPlayerCount() { 
         return lobbyPlayers.size() + hiders.size() + seekers.size() + spectators.size();
     }

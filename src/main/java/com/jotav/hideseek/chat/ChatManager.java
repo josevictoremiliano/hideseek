@@ -144,24 +144,67 @@ public class ChatManager {
     // =================== MENSAGENS DE CAPTURA ===================
     
     public void playerCaptured(MinecraftServer server, ServerPlayer hider, ServerPlayer seeker, int hidersRemaining) {
+        // Mensagem principal para todos
         Component message = PREFIX_ERROR
             .copy()
-            .append(Component.literal("💀 ").withStyle(ChatFormatting.RED))
+            .append(Component.literal("💀 ").withStyle(ChatFormatting.RED, ChatFormatting.BOLD))
             .append(Component.literal(hider.getName().getString()).withStyle(ChatFormatting.WHITE, ChatFormatting.BOLD))
             .append(Component.literal(" foi capturado por ").withStyle(ChatFormatting.RED))
             .append(Component.literal(seeker.getName().getString()).withStyle(ChatFormatting.WHITE, ChatFormatting.BOLD))
-            .append(Component.literal("! Restam ").withStyle(ChatFormatting.RED))
+            .append(Component.literal("!").withStyle(ChatFormatting.RED));
+        
+        // Mensagem de status
+        Component statusMessage = PREFIX_INFO
+            .copy()
+            .append(Component.literal("🏃 ").withStyle(ChatFormatting.GREEN))
             .append(Component.literal(String.valueOf(hidersRemaining)).withStyle(ChatFormatting.WHITE, ChatFormatting.BOLD))
-            .append(Component.literal(" Hiders.").withStyle(ChatFormatting.RED));
+            .append(Component.literal(" Hiders ainda escondidos").withStyle(ChatFormatting.GREEN));
         
         broadcastToAll(server, message);
+        broadcastToAll(server, statusMessage);
+        
+        // Título dramático para todos os jogadores
+        Component titleComponent = Component.literal("💀 CAPTURADO!").withStyle(ChatFormatting.RED, ChatFormatting.BOLD);
+        Component subtitleComponent = Component.literal(hider.getName().getString() + " foi encontrado!")
+            .withStyle(ChatFormatting.YELLOW);
+        
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            player.sendSystemMessage(Component.literal("=".repeat(30)).withStyle(ChatFormatting.GRAY));
+            // Enviar título via packet
+            sendTitleToPlayer(player, titleComponent, subtitleComponent);
+        }
         
         // Mensagem personalizada para o Hider capturado
         Component capturedMessage = PREFIX_INFO
             .copy()
-            .append(Component.literal("Você foi capturado! Agora é um espectador.").withStyle(ChatFormatting.GRAY));
+            .append(Component.literal("👻 Você foi capturado! ").withStyle(ChatFormatting.GRAY))
+            .append(Component.literal("Agora você está em modo espectador.").withStyle(ChatFormatting.AQUA))
+            .append(Component.literal("\n🔍 Você pode voar e atravessar blocos para observar o jogo!").withStyle(ChatFormatting.GRAY));
         
         sendToPlayer(hider, capturedMessage);
+        
+        // Mensagem especial para o Seeker que capturou
+        Component seekerMessage = PREFIX_SUCCESS
+            .copy()
+            .append(Component.literal("🎯 Boa captura! ").withStyle(ChatFormatting.GOLD))
+            .append(Component.literal("Continue procurando pelos outros Hiders!").withStyle(ChatFormatting.YELLOW));
+        
+        sendToPlayer(seeker, seekerMessage);
+    }
+    
+    /**
+     * Envia título para um jogador
+     */
+    private void sendTitleToPlayer(ServerPlayer player, Component title, Component subtitle) {
+        // Minecraft 1.21 usa packets diretos para títulos
+        try {
+            player.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket(title));
+            player.connection.send(new net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket(subtitle));
+            player.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket(10, 40, 10)); // fadein, stay, fadeout
+        } catch (Exception e) {
+            // Fallback para mensagem no chat se títulos não funcionarem
+            player.sendSystemMessage(title.copy().append(" - ").append(subtitle));
+        }
     }
     
     // =================== MENSAGENS DE VITÓRIA ===================

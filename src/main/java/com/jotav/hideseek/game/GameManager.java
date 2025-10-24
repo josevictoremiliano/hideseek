@@ -198,7 +198,7 @@ public class GameManager {
      */
     private void recordGameStats(boolean seekersWin) {
         // Calcular tempo de jogo para cada jogador
-        long hideTimeSeconds = Config.HIDE_TIME.get();
+        long hideTimeSeconds = GameConfig.getInstance().getHideTime();
         long totalGameTimeSeconds = hideTimeSeconds + (System.currentTimeMillis() - phaseStartTime) / 1000;
         
         // Registrar vitórias/derrotas
@@ -256,13 +256,13 @@ public class GameManager {
         ScoreboardManager.getInstance().showScoreboard();
         
         // Iniciar contagem regressiva no BossBar
-        BossBarManager.getInstance().startPhaseTimer(GameState.STARTING, Config.STARTING_COUNTDOWN.get());
+        BossBarManager.getInstance().startPhaseTimer(GameState.STARTING, GameConfig.getInstance().getStartCountdown());
         
         // Atualizar scoreboard
         ScoreboardManager.getInstance().updateScoreboard();
         
         // Enviar mensagem de início
-        chatManager.gameStartingCountdown(server, Config.STARTING_COUNTDOWN.get());
+        chatManager.gameStartingCountdown(server, GameConfig.getInstance().getStartCountdown());
         
         gameTimer = new Timer();
         gameTimer.schedule(new TimerTask() {
@@ -270,7 +270,7 @@ public class GameManager {
             public void run() {
                 transitionToHiding();
             }
-        }, Config.STARTING_COUNTDOWN.get() * 1000L);
+        }, GameConfig.getInstance().getStartCountdown() * 1000L);
     }
     
     /**
@@ -295,10 +295,10 @@ public class GameManager {
         chatManager.teamsAssigned(server, playerManager.getHiders().size(), playerManager.getSeekers().size());
         
         // Enviar mensagem de início da fase de esconder
-        chatManager.hidingPhaseStarted(server, Config.HIDE_TIME.get());
+        chatManager.hidingPhaseStarted(server, GameConfig.getInstance().getHideTime());
         
         // Iniciar timer da fase HIDING
-        BossBarManager.getInstance().startPhaseTimer(GameState.HIDING, Config.HIDE_TIME.get());
+        BossBarManager.getInstance().startPhaseTimer(GameState.HIDING, GameConfig.getInstance().getHideTime());
         
         // Atualizar scoreboard com novos times
         ScoreboardManager.getInstance().updateScoreboard();
@@ -349,7 +349,7 @@ public class GameManager {
             public void run() {
                 transitionToSeeking();
             }
-        }, Config.HIDE_TIME.get() * 1000L);
+        }, GameConfig.getInstance().getHideTime() * 1000L);
     }
     
     /**
@@ -360,7 +360,7 @@ public class GameManager {
         phaseStartTime = System.currentTimeMillis();
         
         // Iniciar timer da fase SEEKING
-        BossBarManager.getInstance().startPhaseTimer(GameState.SEEKING, Config.SEEK_TIME.get());
+        BossBarManager.getInstance().startPhaseTimer(GameState.SEEKING, GameConfig.getInstance().getSeekTime());
         
         // Atualizar scoreboard
         ScoreboardManager.getInstance().updateScoreboard();
@@ -372,7 +372,7 @@ public class GameManager {
         EffectsManager.getInstance().removeHiderJumpBoost(playerManager.getHiders());
         
         // Anunciar liberação dos Seekers
-        chatManager.seekingPhaseStarted(server, Config.SEEK_TIME.get(), playerManager.getHidersCount());
+        chatManager.seekingPhaseStarted(server, GameConfig.getInstance().getSeekTime(), playerManager.getHidersCount());
         
         HideSeek.LOGGER.info("Seeking phase started");
         
@@ -382,7 +382,7 @@ public class GameManager {
             public void run() {
                 endGame(false); // Timeout - Hiders vencem
             }
-        }, Config.SEEK_TIME.get() * 1000L);
+        }, GameConfig.getInstance().getSeekTime() * 1000L);
     }
     
     /**
@@ -450,8 +450,7 @@ public class GameManager {
             statsManager.recordPlayerCaptured(hider);
             statsManager.recordPlayerMadeCapture(seeker);
             
-            // Teleportar hider capturado para posição de espectador (lobby por enquanto)
-            EffectsManager.getInstance().teleportToLobby(hider);
+            // Não teleportar - em modo espectador pode ficar onde está para observar
             
             // Atualizar UI imediatamente
             ScoreboardManager.getInstance().updateScoreboard();
@@ -460,9 +459,8 @@ public class GameManager {
             int hidersRemaining = playerManager.getHidersCount();
             chatManager.playerCaptured(server, hider, seeker, hidersRemaining);
             
-            // TODO: Aplicar modo espectador real
-            
-            HideSeek.LOGGER.info("Player {} captured by {}", hider.getName().getString(), seeker.getName().getString());
+            HideSeek.LOGGER.info("Player {} captured by {} and moved to spectator mode", 
+                                hider.getName().getString(), seeker.getName().getString());
             
             // Verificar condição de vitória
             if (playerManager.getHidersCount() == 0) {

@@ -2,6 +2,7 @@ package com.jotav.hideseek.commands;
 
 import com.jotav.hideseek.Config;
 import com.jotav.hideseek.chat.ChatManager;
+import com.jotav.hideseek.config.GameConfig;
 import com.jotav.hideseek.game.GameManager;
 import com.jotav.hideseek.stats.StatsManager;
 import com.mojang.brigadier.CommandDispatcher;
@@ -222,11 +223,42 @@ public class HideSeekCommands {
         String phase = StringArgumentType.getString(context, "phase").toUpperCase();
         int seconds = IntegerArgumentType.getInteger(context, "seconds");
         
-        // TODO: Implementar configuração de tempo por fase
-        // Por enquanto apenas confirmação
-        context.getSource().sendSuccess(() -> Component.literal(
-            String.format("Tempo da fase %s definido para %d segundos", phase, seconds)), false);
-        return 1;
+        GameConfig gameConfig = GameConfig.getInstance();
+        boolean success = false;
+        String phaseName = "";
+        
+        switch (phase) {
+            case "HIDE", "HIDING", "ESCONDER" -> {
+                success = gameConfig.setHideTime(seconds);
+                phaseName = "esconder";
+            }
+            case "SEEK", "SEEKING", "BUSCAR" -> {
+                success = gameConfig.setSeekTime(seconds);
+                phaseName = "buscar";
+            }
+            case "START", "STARTING", "COUNTDOWN", "CONTAGEM" -> {
+                success = gameConfig.setStartCountdown(seconds);
+                phaseName = "contagem regressiva";
+            }
+            default -> {
+                context.getSource().sendFailure(Component.literal(
+                    "Fase inválida! Use: HIDE/ESCONDER, SEEK/BUSCAR, ou START/CONTAGEM"));
+                return 0;
+            }
+        }
+        
+        if (success) {
+            final String finalPhaseName = phaseName;
+            final int finalSeconds = seconds;
+            context.getSource().sendSuccess(() -> Component.literal(
+                String.format("✅ Tempo da fase %s definido para %d segundos", finalPhaseName, finalSeconds)), false);
+            return 1;
+        } else {
+            final String finalPhaseName2 = phaseName;
+            context.getSource().sendFailure(Component.literal(
+                String.format("❌ Tempo inválido para fase %s. Consulte os limites permitidos.", finalPhaseName2)));
+            return 0;
+        }
     }
     
     private static int randomizeTeams(CommandContext<CommandSourceStack> context) {
@@ -245,40 +277,28 @@ public class HideSeekCommands {
     }
     
     private static int checkConfig(CommandContext<CommandSourceStack> context) {
-        GameManager gameManager = GameManager.getInstance();
+        GameConfig gameConfig = GameConfig.getInstance();
         
         context.getSource().sendSuccess(() -> Component.literal("=== Configuração do Hide and Seek ==="), false);
         
-        BlockPos lobby = gameManager.getLobbySpawn();
-        if (lobby != null) {
-            context.getSource().sendSuccess(() -> Component.literal(
-                String.format("✓ Lobby: %d, %d, %d", lobby.getX(), lobby.getY(), lobby.getZ())), false);
-        } else {
-            context.getSource().sendSuccess(() -> Component.literal("✗ Lobby não definido"), false);
+        // Mostrar configurações atuais
+        String allConfigs = gameConfig.getAllConfigurations();
+        for (String line : allConfigs.split("\n")) {
+            context.getSource().sendSuccess(() -> Component.literal(line), false);
         }
         
-        BlockPos seekerSpawn = gameManager.getSeekerSpawn();
-        if (seekerSpawn != null) {
-            context.getSource().sendSuccess(() -> Component.literal(
-                String.format("✓ Seeker Spawn: %d, %d, %d", seekerSpawn.getX(), seekerSpawn.getY(), seekerSpawn.getZ())), false);
+        // Verificar configurações faltando
+        String missing = gameConfig.getMissingConfigurations();
+        if (!missing.isEmpty()) {
+            context.getSource().sendSuccess(() -> Component.literal("\n⚠️ Configurações faltando:"), false);
+            for (String line : missing.split("\n")) {
+                if (!line.trim().isEmpty()) {
+                    context.getSource().sendSuccess(() -> Component.literal(line), false);
+                }
+            }
         } else {
-            context.getSource().sendSuccess(() -> Component.literal("✗ Seeker Spawn não definido"), false);
+            context.getSource().sendSuccess(() -> Component.literal("\n✅ Todas as configurações estão definidas!"), false);
         }
-        
-        BlockPos mapMin = gameManager.getMapBoundaryMin();
-        BlockPos mapMax = gameManager.getMapBoundaryMax();
-        if (mapMin != null && mapMax != null) {
-            context.getSource().sendSuccess(() -> Component.literal(
-                String.format("✓ Limites do mapa: (%d,%d,%d) a (%d,%d,%d)", 
-                             mapMin.getX(), mapMin.getY(), mapMin.getZ(),
-                             mapMax.getX(), mapMax.getY(), mapMax.getZ())), false);
-        } else {
-            context.getSource().sendSuccess(() -> Component.literal("✗ Limites do mapa não definidos"), false);
-        }
-        
-        context.getSource().sendSuccess(() -> Component.literal(
-            String.format("Configurações de tempo: Esconder=%ds, Buscar=%ds", 
-                         Config.HIDE_TIME.get(), Config.SEEK_TIME.get())), false);
         
         return 1;
     }
