@@ -184,6 +184,7 @@ public class EffectsManager {
             player.removeEffect(MobEffects.JUMP);
             player.removeEffect(MobEffects.REGENERATION);
             player.removeEffect(MobEffects.INVISIBILITY);
+            player.removeEffect(MobEffects.MOVEMENT_SPEED);
             
             // Restaurar gamemode original (Survival)
             gameModeManager.restoreOriginalGameMode(player);
@@ -199,7 +200,7 @@ public class EffectsManager {
     }
     
     /**
-     * Remove todos os efeitos de imobilização dos Seekers e aplica Jump Boost permanente
+     * Remove todos os efeitos de imobilização dos Seekers e aplica Jump Boost permanente + Speed
      */
     public void removeSeekerEffects(Set<ServerPlayer> seekers) {
         for (ServerPlayer seeker : seekers) {
@@ -216,9 +217,18 @@ public class EffectsManager {
             );
             seeker.addEffect(jumpBoost);
             
+            // Aplicar velocidade de movimento (Speed I) para facilitar a busca
+            MobEffectInstance speed = new MobEffectInstance(
+                MobEffects.MOVEMENT_SPEED,
+                Integer.MAX_VALUE, // Duração infinita durante a busca
+                0, // Nível 0 = Speed I (20% mais rápido)
+                false, false, false
+            );
+            seeker.addEffect(speed);
+            
             // NÃO remover do playersWithEffects - eles ainda têm regeneração ativa
             
-            HideSeek.LOGGER.debug("Removed seeker immobilization effects and applied permanent jump boost to: {}", seeker.getName().getString());
+            HideSeek.LOGGER.debug("Removed seeker immobilization effects and applied jump boost + speed to: {}", seeker.getName().getString());
         }
     }
     
@@ -230,6 +240,7 @@ public class EffectsManager {
             player.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
             player.removeEffect(MobEffects.BLINDNESS);
             player.removeEffect(MobEffects.JUMP);
+            player.removeEffect(MobEffects.MOVEMENT_SPEED);
         }
         
         playersWithEffects.clear();
