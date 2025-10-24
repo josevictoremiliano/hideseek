@@ -2,7 +2,8 @@ package com.jotav.hideseek.effects;
 
 import com.jotav.hideseek.Config;
 import com.jotav.hideseek.HideSeek;
-import com.jotav.hideseek.game.GameManager;
+import com.jotav.hideseek.config.GameConfig;
+import com.jotav.hideseek.effects.GameModeManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
@@ -23,10 +24,15 @@ public class EffectsManager {
     private static EffectsManager instance;
     private final Set<ServerPlayer> playersWithEffects = new HashSet<>();
     private final GameModeManager gameModeManager = GameModeManager.getInstance();
+    private final GameConfig gameConfig = GameConfig.getInstance();
     
     // Configuração de Jump Boost (+5 blocos = nível 4)
     private static final int JUMP_BOOST_LEVEL = 4; // +5 blocos de altura
     private static final int JUMP_BOOST_DURATION = Integer.MAX_VALUE; // Infinito
+    
+    // Configuração de Regeneração (para evitar fome e dano)
+    private static final int REGENERATION_LEVEL = 1; // Nível 1 de regeneração
+    private static final int REGENERATION_DURATION = Integer.MAX_VALUE; // Infinito durante jogo
     
     private EffectsManager() {}
     
@@ -72,16 +78,25 @@ public class EffectsManager {
                 false
             );
             
+            // Regeneração para evitar fome e dano
+            MobEffectInstance regeneration = new MobEffectInstance(
+                MobEffects.REGENERATION,
+                REGENERATION_DURATION,
+                REGENERATION_LEVEL,
+                false, false, false
+            );
+            
             seeker.addEffect(slowness);
             seeker.addEffect(blindness);
             seeker.addEffect(jumpBoost);
+            seeker.addEffect(regeneration);
             
             // Mudar para Adventure Mode para impedir quebra de blocos
             gameModeManager.setGameModeToAdventure(seeker);
             
             playersWithEffects.add(seeker);
             
-            HideSeek.LOGGER.debug("Removed seeker effects from player: {}", seeker.getName().getString());
+            HideSeek.LOGGER.debug("Applied seeker effects to player: {}", seeker.getName().getString());
         }
     }
     
@@ -100,10 +115,20 @@ public class EffectsManager {
                 JUMP_BOOST_LEVEL,
                 false, false, false
             );
+            
+            // Regeneração para evitar fome e dano
+            MobEffectInstance regeneration = new MobEffectInstance(
+                MobEffects.REGENERATION,
+                REGENERATION_DURATION,
+                REGENERATION_LEVEL,
+                false, false, false
+            );
+            
             hider.addEffect(jumpBoost);
+            hider.addEffect(regeneration);
             
             playersWithEffects.add(hider);
-            HideSeek.LOGGER.debug("Applied adventure mode and jump boost to hider: {}", hider.getName().getString());
+            HideSeek.LOGGER.debug("Applied adventure mode, jump boost and regeneration to hider: {}", hider.getName().getString());
         }
     }
     
@@ -127,8 +152,17 @@ public class EffectsManager {
             // Mudar para Adventure Mode
             gameModeManager.setGameModeToAdventure(spectator);
             
+            // Regeneração para evitar fome e dano
+            MobEffectInstance regeneration = new MobEffectInstance(
+                MobEffects.REGENERATION,
+                REGENERATION_DURATION,
+                REGENERATION_LEVEL,
+                false, false, false
+            );
+            spectator.addEffect(regeneration);
+            
             playersWithEffects.add(spectator);
-            HideSeek.LOGGER.debug("Applied adventure mode to spectator: {}", spectator.getName().getString());
+            HideSeek.LOGGER.debug("Applied adventure mode and regeneration to spectator: {}", spectator.getName().getString());
         }
     }
     
@@ -141,6 +175,7 @@ public class EffectsManager {
             player.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
             player.removeEffect(MobEffects.BLINDNESS);
             player.removeEffect(MobEffects.JUMP);
+            player.removeEffect(MobEffects.REGENERATION);
             
             // Restaurar gamemode original (Survival)
             gameModeManager.restoreOriginalGameMode(player);
@@ -173,9 +208,9 @@ public class EffectsManager {
             );
             seeker.addEffect(jumpBoost);
             
-            playersWithEffects.remove(seeker);
+            // NÃO remover do playersWithEffects - eles ainda têm regeneração ativa
             
-            HideSeek.LOGGER.debug("Removed seeker effects and applied jump boost to player: {}", seeker.getName().getString());
+            HideSeek.LOGGER.debug("Removed seeker immobilization effects and applied permanent jump boost to: {}", seeker.getName().getString());
         }
     }
     
@@ -279,7 +314,7 @@ public class EffectsManager {
      * Teleporta jogador para o lobby
      */
     public boolean teleportToLobby(ServerPlayer player) {
-        BlockPos lobbyPos = GameManager.getInstance().getLobbySpawn();
+        BlockPos lobbyPos = gameConfig.getLobbySpawn();
         if (lobbyPos == null) {
             HideSeek.LOGGER.warn("Lobby spawn not set, cannot teleport player: {}", player.getName().getString());
             return false;
@@ -293,16 +328,24 @@ public class EffectsManager {
      * Teleporta Seekers para o spawn específico deles
      */
     public boolean teleportSeekersToSpawn(Set<ServerPlayer> seekers) {
-        BlockPos seekerSpawn = GameManager.getInstance().getSeekerSpawn();
+        BlockPos seekerSpawn = gameConfig.getSeekerSpawn();
         if (seekerSpawn == null) {
             HideSeek.LOGGER.warn("Seeker spawn not set, cannot teleport seekers");
             return false;
         }
         
+        HideSeek.LOGGER.info("Teleporting {} seekers to spawn: {}", seekers.size(), seekerSpawn);
+        
         boolean allSuccess = true;
         for (ServerPlayer seeker : seekers) {
+            HideSeek.LOGGER.info("Teleporting seeker {} from {} to {}", 
+                seeker.getName().getString(), seeker.blockPosition(), seekerSpawn);
+            
             if (!safeTeleport(seeker, seekerSpawn, Level.OVERWORLD)) {
+                HideSeek.LOGGER.error("Failed to teleport seeker: {}", seeker.getName().getString());
                 allSuccess = false;
+            } else {
+                HideSeek.LOGGER.info("Successfully teleported seeker: {}", seeker.getName().getString());
             }
         }
         
@@ -313,8 +356,8 @@ public class EffectsManager {
      * Verifica se um jogador está dentro dos limites do mapa
      */
     public boolean isPlayerInBounds(ServerPlayer player) {
-        BlockPos minBounds = GameManager.getInstance().getMapBoundaryMin();
-        BlockPos maxBounds = GameManager.getInstance().getMapBoundaryMax();
+        BlockPos minBounds = gameConfig.getMapBoundaryMin();
+        BlockPos maxBounds = gameConfig.getMapBoundaryMax();
         
         if (minBounds == null || maxBounds == null) {
             return true; // Se não há limites definidos, considerar sempre válido

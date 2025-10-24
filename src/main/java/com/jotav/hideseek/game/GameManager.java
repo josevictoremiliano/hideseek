@@ -3,6 +3,7 @@ package com.jotav.hideseek.game;
 import com.jotav.hideseek.Config;
 import com.jotav.hideseek.HideSeek;
 import com.jotav.hideseek.chat.ChatManager;
+import com.jotav.hideseek.config.GameConfig;
 import com.jotav.hideseek.effects.EffectsManager;
 import com.jotav.hideseek.stats.StatsManager;
 import com.jotav.hideseek.ui.BossBarManager;
@@ -28,15 +29,10 @@ public class GameManager {
     private final PlayerManager playerManager = new PlayerManager();
     private final ChatManager chatManager = ChatManager.getInstance();
     private final StatsManager statsManager = StatsManager.getInstance();
+    private final GameConfig gameConfig = GameConfig.getInstance();
     private MinecraftServer server;
     
     // Configurações do jogo vêm do Config.java
-    
-    // Pontos de spawn
-    private BlockPos lobbySpawn;
-    private BlockPos seekerSpawn;
-    private BlockPos mapBoundaryMin;
-    private BlockPos mapBoundaryMax;
     
     // Timer do jogo
     private Timer gameTimer;
@@ -307,8 +303,20 @@ public class GameManager {
         // Atualizar scoreboard com novos times
         ScoreboardManager.getInstance().updateScoreboard();
         
+        // Verificar se configurações essenciais estão definidas
+        if (!isGameConfigured()) {
+            chatManager.configurationMissing(server, getMissingConfigurations());
+            currentState = GameState.LOBBY;
+            return;
+        }
+        
         // Teleportar Seekers para seeker spawn e aplicar efeitos
-        EffectsManager.getInstance().teleportSeekersToSpawn(playerManager.getSeekers());
+        boolean seekerTeleportSuccess = EffectsManager.getInstance().teleportSeekersToSpawn(playerManager.getSeekers());
+        if (!seekerTeleportSuccess) {
+            chatManager.configurationMissing(server, "Seeker spawn não configurado! Use /hns set seekerspawn");
+            currentState = GameState.LOBBY;
+            return;
+        }
         EffectsManager.getInstance().applySeekerEffects(playerManager.getSeekers());
         
         // Aplicar efeitos para Hiders (Adventure Mode + Jump Boost temporário)
@@ -326,6 +334,10 @@ public class GameManager {
                 );
                 EffectsManager.getInstance().safeTeleport(hider, randomPos, hider.level().dimension());
             }
+        } else {
+            chatManager.configurationMissing(server, "Lobby spawn não configurado! Use /hns set lobby");
+            currentState = GameState.LOBBY;
+            return;
         }
         
         HideSeek.LOGGER.info("Hiding phase started - {} Hiders, {} Seekers", 
@@ -502,55 +514,49 @@ public class GameManager {
     public GameState getCurrentState() { return currentState; }
     public PlayerManager getPlayerManager() { return playerManager; }
     
-    // Métodos para gerenciar spawn points via configuração
+    // Métodos para gerenciar spawn points via configuração persistente
     public void setLobbySpawn(BlockPos pos, ResourceKey<Level> dimension) { 
-        String configValue = ConfigHelper.positionToString(pos, dimension);
-        // TODO: Salvar no arquivo de configuração
-        this.lobbySpawn = pos;
-        HideSeek.LOGGER.info("Lobby spawn set to: {}", configValue);
+        gameConfig.setLobbySpawn(pos, dimension);
+        HideSeek.LOGGER.info("Lobby spawn set and saved");
     }
     
     public void setSeekerSpawn(BlockPos pos, ResourceKey<Level> dimension) { 
-        String configValue = ConfigHelper.positionToString(pos, dimension);
-        // TODO: Salvar no arquivo de configuração  
-        this.seekerSpawn = pos;
-        HideSeek.LOGGER.info("Seeker spawn set to: {}", configValue);
+        gameConfig.setSeekerSpawn(pos, dimension);
+        HideSeek.LOGGER.info("Seeker spawn set and saved");
     }
     
     public void setMapBoundary(BlockPos min, BlockPos max) { 
-        this.mapBoundaryMin = min; 
-        this.mapBoundaryMax = max;
-        // TODO: Salvar no arquivo de configuração
-        HideSeek.LOGGER.info("Map boundary set: {} to {}", 
-            ConfigHelper.simplePositionToString(min), 
-            ConfigHelper.simplePositionToString(max));
+        gameConfig.setMapBoundary(min, max);
+        HideSeek.LOGGER.info("Map boundary set and saved");
     }
     
     public BlockPos getLobbySpawn() { 
-        if (lobbySpawn == null) {
-            lobbySpawn = ConfigHelper.stringToPosition(Config.LOBBY_SPAWN.get());
-        }
-        return lobbySpawn; 
+        return gameConfig.getLobbySpawn();
     }
     
     public BlockPos getSeekerSpawn() { 
-        if (seekerSpawn == null) {
-            seekerSpawn = ConfigHelper.stringToPosition(Config.SEEKER_SPAWN.get());
-        }
-        return seekerSpawn; 
+        return gameConfig.getSeekerSpawn();
     }
     
     public BlockPos getMapBoundaryMin() { 
-        if (mapBoundaryMin == null) {
-            mapBoundaryMin = ConfigHelper.stringToSimplePosition(Config.MAP_BOUNDARY_MIN.get());
-        }
-        return mapBoundaryMin; 
+        return gameConfig.getMapBoundaryMin();
     }
     
     public BlockPos getMapBoundaryMax() { 
-        if (mapBoundaryMax == null) {
-            mapBoundaryMax = ConfigHelper.stringToSimplePosition(Config.MAP_BOUNDARY_MAX.get());
-        }
-        return mapBoundaryMax; 
+        return gameConfig.getMapBoundaryMax();
+    }
+    
+    /**
+     * Verifica se o jogo está totalmente configurado
+     */
+    public boolean isGameConfigured() {
+        return gameConfig.isFullyConfigured();
+    }
+    
+    /**
+     * Retorna string com configurações faltantes
+     */
+    public String getMissingConfigurations() {
+        return gameConfig.getMissingConfigurations();
     }
 }

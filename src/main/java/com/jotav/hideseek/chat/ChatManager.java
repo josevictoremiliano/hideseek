@@ -225,6 +225,15 @@ public class ChatManager {
     
     // =================== MENSAGENS DE ERRO/INFO ===================
     
+    public void configurationMissing(MinecraftServer server, String missingConfig) {
+        Component message = PREFIX_ERROR
+            .copy()
+            .append(Component.literal("⚙️ Configuração Faltando: ").withStyle(ChatFormatting.RED, ChatFormatting.BOLD))
+            .append(Component.literal(missingConfig).withStyle(ChatFormatting.WHITE));
+        
+        broadcastToAll(server, message);
+    }
+    
     public void gameAlreadyInProgress(ServerPlayer player) {
         Component message = PREFIX_ERROR
             .copy()
